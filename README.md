@@ -1,6 +1,6 @@
 ![banner](banner.png)
 # Welcome!
-This repository contains the labs for [*6.S184/6.S975: Generative AI with Stochastic Differential Equations*](https://diffusion.csail.mit.edu), as taught at MIT over IAP 2025. For questions and concerns, please email us at `erives@mit.edu` and `phold@mit.edu`. Enjoy :)
+This repository contains the labs for [*6.S184/6.S975: Generative AI with Stochastic Differential Equations*](https://diffusion.csail.mit.edu), as taught at MIT over IAP 2026. For questions and concerns, please email us at `erives@mit.edu`, `phold@mit.edu`, and `ronsh@mit.edu`. Enjoy :)
 
 ### Changelog
 - 1/22/25: Lab 1: Fix several typos in lab one.
