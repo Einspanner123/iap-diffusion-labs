@@ -1,0 +1,18 @@
+[project]
+name = "iap-diffusion-labs"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "celluloid>=0.2.0",
+    "ffmpeg>=1.4",
+    "ipykernel>=7.2.0",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "tqdm>=4.67.3",
+]
