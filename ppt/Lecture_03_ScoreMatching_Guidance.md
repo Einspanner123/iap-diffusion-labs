@@ -10,6 +10,15 @@
 2. **Stochastic Sampling（随机采样）**：用 SDE 代替 ODE 生成样本
 3. **Classifier-Free Guidance（无分类器引导）**：如何让生成结果听从 prompt
 
+### 1.1 本讲主线
+
+这一讲其实做了两次“改写”：
+
+1. 把“预测向量场”改写成“预测 score”
+2. 把“普通条件生成”改写成“带 guidance 的条件生成”
+
+前者回答的是“训练目标能不能换一种表达”，后者回答的是“采样时怎样让模型更听 prompt”。
+
 ---
 
 ## 二、复习：Lecture 2 的核心结果
@@ -27,7 +36,7 @@
 
 ---
 
-## 三、Section 4: Score Matching——另一个视角
+## 三、Score Matching——另一个视角
 
 ### 3.1 什么是 Score Function（分数函数）？
 
@@ -93,6 +102,16 @@ $$u_t^{\text{target}}(x|z) = a_t \nabla \log p_t(x|z) + b_t x$$
 $$u_t^{\text{target}}(x) = a_t \nabla \log p_t(x) + b_t x$$
 
 > 💡 **意义：** 学向量场和学 score 是**等价的**！早期的 Diffusion Model 先学 score，再转换成向量场。现在的 Flow Matching 直接学向量场。
+
+**这一步为什么重要？**
+
+因为 score 的统计意义非常直接：
+
+- 它只关心“高概率方向在哪里”
+- 不需要显式计算归一化常数
+- 在扩散文献里，它天然对应“去噪”
+
+所以许多早期扩散模型虽然表面上写的是 score matching，本质上仍是在学习生成过程的动力学。
 
 ### 3.5 Score Matching 训练算法（Algorithm 6）
 
@@ -177,7 +196,7 @@ $$\mathrm{d}X_t = \frac{\sigma_t^2}{2}\nabla \log p_t(X_t)\mathrm{d}t + \sigma_t
 
 ---
 
-## 五、Section 6: Classifier-Free Guidance (CFG)——无分类器引导
+## 五、Classifier-Free Guidance (CFG)——无分类器引导
 
 ### 5.1 问题背景：为什么需要引导？
 
@@ -268,7 +287,7 @@ $$\boxed{u_t^{\theta,w}(x) = (1 - w)\,u_t^\theta(x|\varnothing) + w\,u_t^\theta(
 
 ---
 
-## 六、Section 5: 扩散文献导读
+## 六、扩散文献导读与术语对照
 
 ### 6.1 三种时间约定
 
@@ -315,3 +334,10 @@ $$\mathrm{d}\mathbf{x} = \left[\mathbf{f}(\mathbf{x}, t) - g^2(t)\nabla_x \log p
 | **CFG** | $(1-w)u_t^\theta(x\|\varnothing) + wu_t^\theta(x\|y)$ | 放大 prompt 的影响力 |
 
 > 🏆 **CFG 是实践中最重要的技术之一：** 没有它，AI 生成的图片几乎不可用。Stable Diffusion 3、Meta MovieGen 等全部依赖 CFG。
+
+### 复习时不要混淆的两组概念
+
+1. **Flow Matching vs Score Matching**
+   前者直接回归向量场，后者回归 $\nabla \log p_t(x)$；对高斯路径二者可以互相换算。
+2. **条件生成 vs Guidance**
+   条件生成只是把 prompt 作为输入；guidance 则是在采样时主动放大 prompt 的影响，因此通常更“听话”。
