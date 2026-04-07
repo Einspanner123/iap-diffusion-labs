@@ -6,7 +6,7 @@
 
 ## 一、什么是生成式 AI？
 
-生成式 AI 的核心能力是**"创造"**：给它一个提示（prompt），它能生成图片、视频、文本、甚至蛋白质结构。
+生成式 AI 的核心能力是 **"创造"** ：给它一个提示（prompt），它能生成图片、视频、文本、甚至蛋白质结构。
 
 **本课程聚焦的技术：Flow（流）模型 和 Diffusion（扩散）模型**——当前最先进的生成模型，驱动着 Stable Diffusion、DALL·E、OpenAI Sora、Meta MovieGen、AlphaFold3 等产品。
 
@@ -170,15 +170,18 @@ $$\psi_t(x_0) = \exp(-\theta t) \cdot x_0$$
 
 当 ODE 没有解析解时，用 **Euler 方法**近似求解：
 
-```
-输入: 向量场 u_t, 初始条件 x_0, 步数 n
-1. 设 t = 0, 步长 h = 1/n
-2. 设 X_0 = x_0
-3. 循环 i = 1, ..., n-1:
-      X_{t+h} = X_t + h · u_t(X_t)    ← 朝向量场方向走一小步
-      t ← t + h
-4. 返回轨迹 X_0, X_h, X_{2h}, ..., X_1
-```
+**算法：Euler 方法**
+
+| 步骤 | 操作 |
+|------|------|
+| **输入** | 向量场 $u_t$，初始条件 $x_0$，步数 $n$ |
+| **初始化** | $t \gets 0$，步长 $h \gets 1/n$，$X_0 \gets x_0$ |
+| **循环** | 对 $i = 1, \ldots, n-1$： |
+| ① | $X_{t+h} \gets X_t + h \cdot u_t(X_t)$ |
+| ② | $t \gets t + h$ |
+| **输出** | 轨迹 $X_0, X_h, X_{2h}, \ldots, X_1$ |
+
+> 💡 第①步：朝向量场方向走一小步
 
 **步长的权衡：**
 - **大步长**：速度快，但误差大（像用直尺画曲线）
@@ -188,15 +191,17 @@ $$\psi_t(x_0) = \exp(-\theta t) \cdot x_0$$
 
 把向量场 $u_t$ 换成**神经网络** $u_t^\theta$，就得到了 Flow Model 的采样算法：
 
-```
-输入: 神经网络向量场 u_t^θ, 步数 n
-1. 设 t = 0, 步长 h = 1/n
-2. 随机采样 X_0 ~ p_init（如标准高斯噪声）  ← 随机初始化！
-3. 循环 i = 1, ..., n-1:
-      X_{t+h} = X_t + h · u_t^θ(X_t)
-      t ← t + h
-4. 返回 X_1                                   ← 终点就是生成结果！
-```
+**算法：Flow Model 采样**
+
+| 步骤 | 操作 |
+|------|------|
+| **输入** | 神经网络向量场 $u_t^\theta$，步数 $n$ |
+| **初始化** | $t \gets 0$，步长 $h \gets 1/n$ |
+| **采样起点** | $X_0 \sim p_{\text{init}}$（随机噪声） |
+| **循环** | 对 $i = 1, \ldots, n-1$： |
+| ① | $X_{t+h} \gets X_t + h \cdot u_t^\theta(X_t)$ |
+| ② | $t \gets t + h$ |
+| **输出** | $X_1$（生成的样本） |
 
 > 🎯 从噪声出发，沿着神经网络学到的"河流方向"走，走到终点就是一张生成的图片！
 
@@ -248,6 +253,22 @@ $$\mathrm{d}X_t = u_t(X_t)\,\mathrm{d}t + \sigma_t\,\mathrm{d}W_t$$
 
 > **定理：** 如果向量场 $u_t(x)$ 连续可微、导数有界，且扩散系数 $\sigma_t$ 连续，则 SDE 有唯一解（分布意义上）。
 
+**直觉理解（为什么需要这些条件？）：**
+
+| 条件 | 作用 | 如果不满足会怎样？ |
+|------|------|-------------------|
+| $u_t(x)$ 连续可微 | 保证"推力方向"平滑变化 | 粒子可能突然跳变方向 |
+| 导数有界 | 保证"推力大小"不会爆炸 | 粒子可能瞬间飞到无穷远 |
+| $\sigma_t$ 连续 | 保证"噪声强度"平滑变化 | 随机性可能突然消失或爆炸 |
+
+**类比：** 想象你在风中行走
+- **漂移项** $u_t(x)$ = 风的方向和强度（需要平滑、不能无限大）
+- **扩散项** $\sigma_t$ = 地面震动的大小（需要连续变化）
+- **解的存在** = 你能走出一条路径
+- **解的唯一** = 给定起点和风场，你的轨迹是确定的（分布意义上）
+
+> 🎯 **一句话：** 只要"推力"和"噪声"都足够"规矩"（平滑、有界），SDE 就一定有解，而且解是唯一的。
+
 ### 4.4 例子：Ornstein-Uhlenbeck 过程
 
 $$\mathrm{d}X_t = -\theta X_t \mathrm{d}t + \sigma \mathrm{d}W_t$$
@@ -261,15 +282,19 @@ $$\mathrm{d}X_t = -\theta X_t \mathrm{d}t + \sigma \mathrm{d}W_t$$
 
 ### 4.5 Euler-Maruyama 方法——数值求解 SDE
 
-```
-输入: 向量场 u_t, 扩散系数 σ_t, 初始条件 x_0, 步数 n
-1. 设 t = 0, 步长 h = 1/n, X_0 = x_0
-2. 循环 i = 1, ..., n-1:
-      采样 ε ~ N(0, I_d)
-      X_{t+h} = X_t + h · u_t(X_t) + σ_t · √h · ε    ← 确定推力 + 随机抖动
-      t ← t + h
-3. 返回轨迹
-```
+**算法：Euler-Maruyama 方法**
+
+| 步骤 | 操作 |
+|------|------|
+| **输入** | 向量场 $u_t$，扩散系数 $\sigma_t$，初始条件 $x_0$，步数 $n$ |
+| **初始化** | $t \gets 0$，步长 $h \gets 1/n$，$X_0 \gets x_0$ |
+| **循环** | 对 $i = 1, \ldots, n-1$： |
+| ① | 采样 $\epsilon \sim \mathcal{N}(0, I_d)$ |
+| ② | $X_{t+h} \gets X_t + h \cdot u_t(X_t) + \sigma_t \cdot \sqrt{h} \cdot \epsilon$ |
+| ③ | $t \gets t + h$ |
+| **输出** | 轨迹 $X_0, X_h, X_{2h}, \ldots, X_1$ |
+
+> 💡 第②步的含义：**确定性推力** $h \cdot u_t(X_t)$ + **随机抖动** $\sigma_t \sqrt{h} \cdot \epsilon$
 
 **和 Euler 方法的对比：**
 
@@ -282,16 +307,18 @@ $$\mathrm{d}X_t = -\theta X_t \mathrm{d}t + \sigma \mathrm{d}W_t$$
 
 ### 4.6 Diffusion Model 的采样算法
 
-```
-输入: 神经网络向量场 u_t^θ, 扩散系数 σ_t, 步数 n
-1. 设 t = 0, 步长 h = 1/n
-2. 随机采样 X_0 ~ p_init
-3. 循环 i = 1, ..., n-1:
-      采样 ε ~ N(0, I_d)
-      X_{t+h} = X_t + h · u_t^θ(X_t) + σ_t · √h · ε
-      t ← t + h
-4. 返回 X_1
-```
+**算法：Diffusion Model 采样**
+
+| 步骤 | 操作 |
+|------|------|
+| **输入** | 神经网络向量场 $u_t^\theta$，扩散系数 $\sigma_t$，步数 $n$ |
+| **初始化** | $t \gets 0$，步长 $h \gets 1/n$ |
+| **采样起点** | $X_0 \sim p_{\text{init}}$（随机噪声） |
+| **循环** | 对 $i = 1, \ldots, n-1$： |
+| ① | 采样 $\epsilon \sim \mathcal{N}(0, I_d)$ |
+| ② | $X_{t+h} \gets X_t + h \cdot u_t^\theta(X_t) + \sigma_t \cdot \sqrt{h} \cdot \epsilon$ |
+| ③ | $t \gets t + h$ |
+| **输出** | $X_1$（生成的样本） |
 
 > 和 Flow Model 的唯一区别：每一步多了随机噪声。这在某些任务（如蛋白质生成）中可以提供更好的**多样性**。
 
@@ -307,7 +334,7 @@ $$\mathrm{d}X_t = -\theta X_t \mathrm{d}t + \sigma \mathrm{d}W_t$$
 | **数据分布** $p_{\text{data}}$ | 对"好"的对象赋予高概率的分布 |
 | **生成 = 采样** | 从 $p_{\text{data}}$ 中采样 |
 | **数据集** | 从 $p_{\text{data}}$ 抽取的有限样本 |
-| **条件生成** | 从 $p_{\text{data}}(\cdot|y)$ 采样 |
+| **条件生成** | 从 $p_{\text{data}}(\cdot\|y)$ 采样 |
 | **生成模型** | 把简单分布（高斯）的样本变换为数据分布的样本 |
 
 ### Section 2 的核心概念
@@ -325,10 +352,10 @@ $$\mathrm{d}X_t = -\theta X_t \mathrm{d}t + \sigma \mathrm{d}W_t$$
 
 ### 两种模型的关系
 
-```
-Flow Model:      dX_t = u_t^θ(X_t) dt              ← 确定性（ODE）
-Diffusion Model:  dX_t = u_t^θ(X_t) dt + σ_t dW_t   ← 随机性（SDE）
-```
+| 模型 | 方程 | 性质 |
+|------|------|------|
+| **Flow Model** | $\mathrm{d}X_t = u_t^\theta(X_t)\,\mathrm{d}t$ | 确定性（ODE） |
+| **Diffusion Model** | $\mathrm{d}X_t = u_t^\theta(X_t)\,\mathrm{d}t + \sigma_t\,\mathrm{d}W_t$ | 随机性（SDE） |
 
 > 当 $\sigma_t = 0$ 时，Diffusion Model 退化为 Flow Model。Flow Model 是 Diffusion Model 的特例。
 
