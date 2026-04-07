@@ -41,7 +41,7 @@ $$X_0 \sim p_{\text{init}},\quad \mathrm{d}X_t = u_t^\theta(X_t)\mathrm{d}t \qua
 ## 二、Flow Matching 矩阵——全局路线图
 
 这是整节课最重要的框架，一个 2×3 的表格：
-
+ 
 |  | **概率路径** (Probability Path) | **向量场** (Vector Field) | **损失函数** (FM Loss) |
 |---|---|---|---|
 | **条件的** (Conditional) | $p_t(\cdot\|z)$ | $u_t^{\text{target}}(x\|z)$ | $\mathcal{L}_{\text{CFM}}(\theta)$ |
