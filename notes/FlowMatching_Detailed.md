@@ -2,7 +2,7 @@
 
 > **论文：** Flow Matching for Generative Modeling (Lipman et al., ICLR 2023)
 >
-> **地位：** 当前最主流的生成模型训练范式，被 Stable Diffusion 3、MovieGen 等顶级产品采用
+> **地位：** 近年非常重要的生成模型训练范式之一，在部分前沿模型与公开实现中被采用
 
 ---
 
@@ -138,7 +138,7 @@ $$p_t(x|z) = \mathcal{N}(x; tz, \sigma^2 I)$$
 | 向量场 | $u_t = \frac{z-x}{1-t}$（时变） | $u_t = z$（常数！） |
 | 实践效果 | **更好**（路径更直） | 理论优美但效果略差 |
 
-> ⚠️ **本文后续主要使用 OT-CFM**，因为它是实践中效果最好的选择，也是 Stable Diffusion 3 等产品采用的方案。
+> ⚠️ **本文后续主要使用 OT-CFM**，因为它在很多公开实验里更稳、更直观。实际工业实现是否采用、采用到什么程度，要看具体模型和版本。
 
 ---
 
@@ -175,7 +175,7 @@ $$\boxed{u_t^{\text{target}}(x|z) = \frac{z - x}{1-t}}$$
 
 | 性质 | 验证 |
 |------|------|
-| $t=0$ 时 | $u_0(x\|z) = z - x$（把粒子推向 $z$） |
+| $t=0$ 时 | $u_0(x \mid z) = z - x$（把粒子推向 $z$） |
 | $t \to 1$ 时 | $u_t \to \infty$（需要数值处理，见后文） |
 | 方向正确 | 当 $x$ 在 $z$ 左边时推力向右，反之亦然 |
 | 大小合理 | 离 $z$ 越远，推力越大 |
@@ -250,7 +250,7 @@ $$\boxed{\mathcal{L}_{\text{OT-CFM}}(\theta) = \mathbb{E}_{t,z,\epsilon}\left[\l
 | ② | 采样 $t \sim \text{Uniform}[0,1]$（均匀采一个时间） |
 | ③ | 采样 $\epsilon \sim \mathcal{N}(0, I_d)$（标准高斯噪声） |
 | ④ | 构造混合样本 $x = tz + (1-t)\epsilon$ |
-| ⑤ | 计算损失 $\mathcal{L} = \|u_t^\theta(x, t) - (z - \epsilon)\|^2$ |
+| ⑤ | 计算损失 $\mathcal{L} = \Vert u_t^\theta(x, t) - (z - \epsilon)\Vert^2$ |
 | ⑥ | 反向传播更新参数 $\theta$ |
 
 > 🎯 **这就是全部了！没有 $\beta_t$、没有 $\bar{\alpha}_t$、没有复杂的辅助变量。就是一个普通的回归问题。**
@@ -325,7 +325,7 @@ $$u_t(x) = \int u_t(x|z) \frac{p_t(x|z)p_{\text{data}}(z)}{p_t(x)} \mathrm{d}z$$
 
 ### 6.1 路径选择总览
 
-| 路径 | 条件概率 $p_t(x\|z)$ | 条件向量场 $u_t(x\|z)$ | 特点 |
+| 路径 | 条件概率 $p_t(x \mid z)$ | 条件向量场 $u_t(x \mid z)$ | 特点 |
 |------|----------------------|------------------------|------|
 | **OT-CFM** | $\mathcal{N}(tz, (1-t)^2 I)$ | $\frac{z-x}{1-t}$ | 路径最直，效果最好 |
 | **FM** | $\mathcal{N}(tz, \sigma^2 I)$ | $z$ | 常数向量场，理论优美 |
@@ -367,9 +367,9 @@ $$u_t(x|z) = \frac{\dot{\alpha}_t}{\alpha_t}(x - z \cdot \frac{\dot{\alpha}_t \s
 |------|------|------|-----------|-------------------|
 | **年份** | 2020 | 2021 | 2021 | **2022+** |
 | **数学框架** | 离散马尔可夫链 | 离散非马尔可夫 | 连续 SDE/ODE | **连续 ODE** |
-| **前向过程** | $q(x_t\|x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}x_{t-1}, \beta_t I)$ | 同左 | $\mathrm{d}x = f\,\mathrm{d}t + g\,\mathrm{d}W_t$ | $p_t(x\|z) = \mathcal{N}(tz, (1-t)^2 I)$ |
+| **前向过程** | $q(x_t \mid x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}x_{t-1}, \beta_t I)$ | 同左 | $\mathrm{d}x = f\,\mathrm{d}t + g\,\mathrm{d}W_t$ | $p_t(x \mid z) = \mathcal{N}(tz, (1-t)^2 I)$ |
 | **学习目标** | 噪声 $\epsilon_\theta$ | 噪声 $\epsilon_\theta$ | Score $s_\theta$ | **向量场 $u_t^\theta$** |
-| **损失函数** | $\|\epsilon - \epsilon_\theta\|^2$ | 同左 | $\lambda\|s_\theta - \nabla\log p\|^2$ | **$\|u_t^\theta - u^{\text{target}}\|^2$** |
+| **损失函数** | $\Vert\epsilon - \epsilon_\theta\Vert^2$ | 同左 | $\lambda\Vert s_\theta - \nabla\log p\Vert^2$ | **$\Vert u_t^\theta - u^{\text{target}}\Vert^2$** |
 | **噪声调度** | ⚠️ 需设计 $\beta_t$ | 复用 DDPM | ⚠️ 需设计 $g(t)$ | **❌ 无需设计！** |
 | **辅助变量** | $\alpha_t, \bar{\alpha}_t, \tilde{\beta}_t...$ | 同左 + $\eta$ | $f, g, \lambda$ | **无！** |
 | **采样步数** | 1000 | 50 | 可变 | **5-20** |
@@ -466,8 +466,8 @@ trainer.train(model, path)
 | $\epsilon$ | 噪声向量 | $\mathbb{R}^d$ | 标准高斯噪声 $\mathcal{N}(0, I)$ |
 | $p_{\text{simple}}$ | 分布 | — | 简单分布（通常是标准高斯） |
 | $p_{\text{data}}$ | 分布 | — | 数据分布 |
-| $p_t(x\|z)$ | 条件密度 | — | 给定 $z$ 时 $x$ 在时刻 $t$ 的分布 |
-| $u_t^{\text{target}}(x\|z)$ | 向量场 | $\mathbb{R}^d \times [0,1] \times \mathbb{R}^d \to \mathbb{R}^d$ | 真实的条件向量场（解析可得） |
+| $p_t(x \mid z)$ | 条件密度 | — | 给定 $z$ 时 $x$ 在时刻 $t$ 的分布 |
+| $u_t^{\text{target}}(x \mid z)$ | 向量场 | $\mathbb{R}^d \times [0,1] \times \mathbb{R}^d \to \mathbb{R}^d$ | 真实的条件向量场（解析可得） |
 | $u_t^\theta(x, t)$ | 神经网络 | $\mathbb{R}^d \times [0,1] \to \mathbb{R}^d$ | 学习到的向量场 |
 | $\theta$ | 参数集 | — | 神经网络的全部可学习参数 |
 

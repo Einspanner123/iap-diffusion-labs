@@ -121,17 +121,9 @@ $$x_t = \sqrt{\bar{\alpha}_t} x_0 + \sqrt{1-\bar{\alpha}_t} \cdot \epsilon_t$$
 
 其中 $\epsilon_t \sim \mathcal{N}(0, I)$。
 
-**DDIM 的构造方法：** 将 $\epsilon_{t-1}$ 分解为两部分——与 $\epsilon_t$ 相关的确定性部分，加上独立的随机部分：
+**先说清楚：** 这里如果硬把 $\epsilon_{t-1}$ 拆成“沿 $\epsilon_t$ 的部分 + 独立随机部分”，很容易写错。DDIM 论文真正做法不是先猜这个分解，而是直接去构造 $x_{t-1}$ 的条件分布，使它满足正确的边缘分布。
 
-$$\epsilon_{t-1} = \underbrace{\sqrt{\frac{1-\bar{\alpha}_{t-1}-\sigma_t^2}{1-\bar{\alpha}_t}} \cdot \epsilon_t}_{\text{确定性部分（沿 } \epsilon_t \text{ 方向）}} + \underbrace{\frac{\sigma_t}{\sqrt{1-\bar{\alpha}_{t-1}}} \cdot z'}_{\text{随机部分}}$$
-
-其中 $z' \sim \mathcal{N}(0, I)$ 与 $\epsilon_t$ 独立。
-
-**验证方差：**
-
-$$\text{Var}(\epsilon_{t-1}) = \frac{1-\bar{\alpha}_{t-1}-\sigma_t^2}{1-\bar{\alpha}_t} \cdot I + \frac{\sigma_t^2}{1-\bar{\alpha}_{t-1}} \cdot I$$
-
-等等，这个分解不太对。让我们换一个更直接的方法。
+所以我们跳过那个容易出错的中间猜测，直接看论文的严格构造。
 
 ### 2.5 直接构造法（DDIM 论文的方法）
 
@@ -434,7 +426,7 @@ $$\mathcal{L}_{\text{DDIM}} = \mathcal{L}_{\text{DDPM}}$$
 | **更新公式** | $x_{t-1} = \frac{1}{\sqrt{\alpha_t}}(x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta) + \sqrt{\tilde{\beta}_t} \cdot z$ | $x_{t-1} = \sqrt{\bar{\alpha}_{t-1}}\hat{x}_0 + \sqrt{1-\bar{\alpha}_{t-1}}\epsilon_\theta$ |
 | **随机项** | ✅ 有 $\sqrt{\tilde{\beta}_t} \cdot z$ | ❌ 无 |
 | **数学形式** | SDE | **ODE** |
-| **训练目标** | $\|\epsilon - \epsilon_\theta\|^2$ | **同左**（复用 DDPM 训练好的模型！） |
+| **训练目标** | $\Vert\epsilon - \epsilon_\theta\Vert^2$ | **同左**（复用 DDPM 训练好的模型！） |
 | **需要重新训练？** | — | ❌ 不需要！直接用 DDPM 权重 |
 
 ### 7.2 性能对比

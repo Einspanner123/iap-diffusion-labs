@@ -119,8 +119,8 @@ $$\mathrm{d}x = -\frac{1}{2}\beta(t)\,x\,\mathrm{d}t + \sqrt{\beta(t)}\,\mathrm{
 |------|------|
 | 来源 | DDPM 的连续极限 |
 | 特点 | 漂移项向原点收缩，保持方差结构 |
-| 边缘分布 | $p_{0t}(x\|x_0) = \mathcal{N}(x; e^{-\frac{1}{2}\int_0^t \beta(s)ds}x_0, (1-e^{-\int_0^t \beta(s)ds})I)$ |
-| 方差 | $\text{Var}(x_t\|x_0) = (1-e^{-\int_0^t \beta(s)ds})I \leq I$，方差有上界 |
+| 边缘分布 | $p_{0t}(x \mid x_0) = \mathcal{N}(x; e^{-\frac{1}{2}\int_0^t \beta(s)ds}x_0, (1-e^{-\int_0^t \beta(s)ds})I)$ |
+| 方差 | $\text{Var}(x_t \mid x_0) = (1-e^{-\int_0^t \beta(s)ds})I \leq I$，方差有上界 |
 
 **为什么叫"方差保持"？** 因为如果 $x_0$ 的方差是 $I$，那么 $x_t$ 的方差也是 $I$（无条件方差不变）。漂移项 $-\frac{1}{2}\beta(t)x$ 的"收缩"恰好抵消了扩散项的"膨胀"。
 
@@ -136,8 +136,8 @@ $$\mathrm{d}x = g(t)\,\mathrm{d}W_t$$
 |------|------|
 | 来源 | Score-based 模型（NCSN）的连续极限 |
 | 特点 | **没有漂移项**，只有扩散项，方差随时间爆炸式增长 |
-| 边缘分布 | $p_{0t}(x\|x_0) = \mathcal{N}(x; x_0, (\int_0^t g^2(s)ds)I)$ |
-| 方差 | $\text{Var}(x_t\|x_0) = (\int_0^t g^2(s)ds)I$，随 $t$ 单调递增，无上界 |
+| 边缘分布 | $p_{0t}(x \mid x_0) = \mathcal{N}(x; x_0, (\int_0^t g^2(s)ds)I)$ |
+| 方差 | $\text{Var}(x_t \mid x_0) = (\int_0^t g^2(s)ds)I$，随 $t$ 单调递增，无上界 |
 
 **为什么叫"方差爆炸"？** 因为没有向心力（漂移项），噪声不断累积，方差趋向无穷。常用 $g(t)$ 选择：$g(t) = \sigma_{\min}(\sigma_{\max}/\sigma_{\min})^t$（指数增长）。
 
@@ -158,9 +158,9 @@ $$\mathrm{d}x = -\frac{1}{2}\beta(t)\,x\,\mathrm{d}t + \sqrt{\beta(t)(1-e^{-2\in
 | 性质 | 说明 |
 |------|------|
 | 来源 | VP-SDE 的变体，Song et al. 2021 提出 |
-| 特点 | 扩散系数比 VP-SDE 更大，方差始终小于等于 VP-SDE |
-| 方差 | $\text{Var}(x_t\|x_0) = (1-e^{-2\int_0^t \beta(s)ds})^2 I$ |
-| 实践 | 通常效果不如 VP-SDE 和 VE-SDE |
+| 特点 | 扩散强度介于 VP-SDE 和 VE-SDE 的直觉之间，常用于对比分析 |
+| 方差 | 这里不展开完整闭式推导；实际使用时通常按论文定义的前向过程来理解 |
+| 实践 | 文献中更多作为理论上的补充形式，而不是最常用的默认选择 |
 
 ---
 
@@ -391,9 +391,9 @@ $$x \leftarrow x + r \cdot \nabla_x \log p_t(x) + \sqrt{2r} \cdot \epsilon$$
 | 项目 | DDPM (2020) | DDIM (2021) | Score SDE (2021) |
 |------|-------------|-------------|------------------|
 | **数学框架** | 离散马尔可夫链 | 离散非马尔可夫 | **连续 SDE/ODE** |
-| **前向过程** | $q(x_t\|x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}x_{t-1}, \beta_t I)$ | 同左 | $\mathrm{d}x = f(x,t)\mathrm{d}t + g(t)\mathrm{d}W_t$ |
+| **前向过程** | $q(x_t \mid x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}x_{t-1}, \beta_t I)$ | 同左 | $\mathrm{d}x = f(x,t)\mathrm{d}t + g(t)\mathrm{d}W_t$ |
 | **学习目标** | 噪声预测 $\epsilon_\theta$ | 噪声预测 $\epsilon_\theta$ | **Score 预测 $s_\theta = \nabla_x \log p_t(x)$** |
-| **损失函数** | $\|\epsilon - \epsilon_\theta\|^2$ | 同左 | $\lambda(t)\|s_\theta - \nabla \log p_{0t}\|^2$ |
+| **损失函数** | $\Vert\epsilon - \epsilon_\theta\Vert^2$ | 同左 | $\lambda(t)\Vert s_\theta - \nabla \log p_{0t}\Vert^2$ |
 | **噪声调度** | $\beta_t$（超参数） | 复用 DDPM 的 | $g(t)$ 或 $\beta(t)$（仍需设计） |
 | **采样方式** | 随机（1000步） | 确定/可选（50步） | 随机或确定（可变步数） |
 | **理论统一性** | 单一模型 | DDPM 变体 | **统一所有扩散模型** |
@@ -423,7 +423,7 @@ $$x \leftarrow x + r \cdot \nabla_x \log p_t(x) + \sqrt{2r} \cdot \epsilon$$
 | $s_\theta(x,t)$ | 神经网络 | $\mathbb{R}^d \times [0,T] \to \mathbb{R}^d$ | Score 的近似 |
 | $\lambda(t)$ | 权重函数 | $[0,T] \to \mathbb{R}^+$ | 不同时间步的损失权重 |
 | $p_t(x)$ | 概率密度 | $\mathbb{R}^d \to \mathbb{R}^+$ | 时间 $t$ 时的数据分布 |
-| $p_{0t}(x\|x_0)$ | 条件密度 | — | 给定 $x_0$ 时 $x(t)$ 的分布 |
+| $p_{0t}(x \mid x_0)$ | 条件密度 | — | 给定 $x_0$ 时 $x(t)$ 的分布 |
 | $\beta(t)$ | 噪声调度 | $[0,T] \to \mathbb{R}^+$ | VP-SDE 的噪声方差率 |
 | $\bar{\alpha}(t)$ | 累积保留 | $[0,T] \to (0,1]$ | $e^{-\int_0^t \beta(s)ds}$（VP-SDE） |
 

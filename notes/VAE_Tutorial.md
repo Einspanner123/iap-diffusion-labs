@@ -112,8 +112,8 @@ $$\text{KL}(q(\theta) \| p(\theta)) = \int q(\theta) \log \frac{q(\theta)}{p(\th
 
 | 方向 | 名称 | 特点 |
 |------|------|------|
-| $\text{KL}(q\|p)$ | I-projection / 时刻匹配 | $q$ 会"回避" $p$ 为零的区域，$q$ 比 $p$ 更窄 |
-| $\text{KL}(p\|q)$ | M-projection / 均值匹配 | $q$ 会"覆盖" $p$ 的所有区域，$q$ 比 $p$ 更宽 |
+| $\text{KL}(q \mid p)$ | I-projection / 时刻匹配 | $q$ 会"回避" $p$ 为零的区域，$q$ 比 $p$ 更窄 |
+| $\text{KL}(p \mid q)$ | M-projection / 均值匹配 | $q$ 会"覆盖" $p$ 的所有区域，$q$ 比 $p$ 更宽 |
 
 > 💡 VAE 使用 $\text{KL}(q\|p)$ 方向，这意味着近似后验 $q(z|x)$ 会比真实后验更窄，倾向于"保守"地使用潜变量。
 
@@ -226,8 +226,8 @@ $$\boxed{\mathcal{L}_{\text{VAE}} = -\mathbb{E}_{q_\phi(z|x)}[\log p_\theta(x|z)
 
 | 项 | 作用 | 直观理解 |
 |------|------|----------|
-| **重构损失** $-\mathbb{E}_{q}[\log p_\theta(x\|z)]$ | 让解码器能重建输入 | "解码器要能还原图片" |
-| **KL 正则化** $\text{KL}(q_\phi(z\|x)\|p(z))$ | 让编码器输出接近先验 | "潜变量要保持标准正态分布" |
+| **重构损失** $-\mathbb{E}_{q}[\log p_\theta(x \mid z)]$ | 让解码器能重建输入 | "解码器要能还原图片" |
+| **KL 正则化** $\text{KL}(q_\phi(z \mid x) \mid p(z))$ | 让编码器输出接近先验 | "潜变量要保持标准正态分布" |
 
 ### 4.5 具体实现：高斯编码器
 
@@ -575,7 +575,7 @@ $$\mathcal{L} = \underbrace{\|x - D(z_q)\|^2}_{\text{重构}} + \underbrace{\|sg
 
 **VQ-VAE-2**（Razavi et al., 2019）将 VQ-VAE 与层次化自回归先验结合，是扩散模型之前最强大的生成模型之一。
 
-**Latent Diffusion**（Rombach et al., 2022，即 Stable Diffusion）的核心思想也来自 VQ-VAE：先在潜空间中学习表示，再在潜空间中做扩散。
+**Latent Diffusion**（Rombach et al., 2022，即 Stable Diffusion）的核心思想是先把图像压到潜空间，再在潜空间里做扩散；它和 VQ-VAE 一样都强调“先学一个表示，再在表示空间里生成”，但具体实现并不是典型的 VQ-VAE 路线。
 
 ---
 
@@ -613,8 +613,8 @@ $$\mathcal{L}_{\text{DDPM}} = \mathbb{E}_{q(x_{1:T}|x_0)}\left[\sum_{t=1}^T \log
 |------|-----|---------|
 | **潜变量** | 单层 $z$ | 多层 $\{x_1, \ldots, x_T\}$ |
 | **先验** | $p(z) = \mathcal{N}(0, I)$ | $p(x_T) = \mathcal{N}(0, I)$ |
-| **生成过程** | 一步：$x \sim p(x\|z)$ | 多步：$x_0 \sim p(x_0\|x_1) \cdots p(x_{T-1}\|x_T)$ |
-| **推断过程** | 一步：$z \sim q(z\|x)$ | 多步：$x_T \sim q(x_T\|x_{T-1}) \cdots q(x_1\|x_0)$ |
+| **生成过程** | 一步：$x \sim p(x \mid z)$ | 多步：$x_0 \sim p(x_0 \mid x_1) \cdots p(x_{T-1} \mid x_T)$ |
+| **推断过程** | 一步：$z \sim q(z \mid x)$ | 多步：$x_T \sim q(x_T \mid x_{T-1}) \cdots q(x_1 \mid x_0)$ |
 | **推断是否学习** | 是（编码器） | **否（固定的加噪过程）** |
 | **后验坍塌** | 有此问题 | 无此问题 |
 
@@ -637,7 +637,7 @@ DDPM 可以看作**固定推断过程**的层次化 VAE：
 
 | VAE | 扩散模型 |
 |-----|---------|
-| 编码器 $q_\phi(z\|x)$ 需要学习 | 加噪过程 $q(x_t\|x_{t-1})$ 是固定的 |
+| 编码器 $q_\phi(z \mid x)$ 需要学习 | 加噪过程 $q(x_t \mid x_{t-1})$ 是固定的 |
 | 编码器可能"偷懒"不编码信息 | 加噪过程一定会添加噪声 |
 | KL 惩罚可能导致后验坍塌 | 没有 KL 惩罚（推断是固定的） |
 
@@ -894,9 +894,9 @@ $$\text{KL}(\mathcal{N}(\mu,\text{diag}(\sigma^2))\|\mathcal{N}(0,I)) = \frac{1}
 | 解码器 | 重构损失 |
 |--------|----------|
 | Bernoulli | BCE |
-| Gaussian（固定 $\sigma^2$） | $\frac{1}{2\sigma^2}\|x-\hat{x}\|^2$ |
+| Gaussian（固定 $\sigma^2$） | $\frac{1}{2\sigma^2}\Vert x-\hat{x}\Vert^2$ |
 | Gaussian（学习 $\sigma^2$） | $\frac{1}{2}\sum\left[\frac{(x_i-\hat{x}_i)^2}{\sigma_i^2}+\log\sigma_i^2\right]$ |
-| Laplace | $\frac{1}{b}\|x-\hat{x}\|_1$ |
+| Laplace | $\frac{1}{b}\Vert x-\hat{x}\Vert_1$ |
 
 ---
 

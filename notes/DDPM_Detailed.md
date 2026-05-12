@@ -84,7 +84,7 @@ $$q(x_t | x_{t-1}) = \mathcal{N}(x_t; \sqrt{1-\beta_t} x_{t-1}, \beta_t I)$$
 | $T$ | 总步数 | 标量 | 通常 = 1000 |
 | $\beta_t$ | 噪声调度 | 标量序列 $(T,)$ | 第 $t$ 步添加的噪声方差 |
 | $I$ | 单位矩阵 | $(d, d)$ | 保证各维度独立同分布 |
-| $q(\cdot\|\cdot)$ | 前向条件分布 | — | 真实的（已知的）转移分布 |
+| $q(\cdot \mid \cdot)$ | 前向条件分布 | — | 真实的（已知的）转移分布 |
 
 #### $\beta_t$ 的含义
 
@@ -109,7 +109,7 @@ $$p_\theta(x_{t-1}|x_t) = \mathcal{N}(x_{t-1}; \mu_\theta(x_t, t), \sigma_t^2 I)
 
 | 符号 | 名称 | 含义 |
 |------|------|------|
-| $p_\theta(\cdot\|\cdot)$ | 反向条件分布 | 神经网络学习的近似分布 |
+| $p_\theta(\cdot \mid \cdot)$ | 反向条件分布 | 神经网络学习的近似分布 |
 | $\mu_\theta(x_t, t)$ | 预测均值 | 神经网络输出第 $t$ 步的去噪均值 |
 | $\sigma_t$ | 噪声标准差 | 反向过程的噪声标准差（见下文详细讨论） |
 | $\theta$ | 神经网络参数 | 如 UNet 的权重 |
@@ -345,6 +345,17 @@ L_{t-1} &= \frac{1}{2\tilde{\beta}_t}\left\|\frac{1}{\sqrt{\alpha_t}}\left(x_t -
 
 $$L_{t-1} = w_t \|\epsilon - \epsilon_\theta(x_t, t)\|^2$$
 
+### 5.3b L₀ 重建项的工程处理
+
+$L_0 = -\log p_\theta(x_0|x_1)$ 是 VLB 中的重建项。对于归一化到 $[-1, 1]$ 的图像，像素值本质上是离散的（整数像素值），但 $p_\theta(x_0|x_1)$ 被建模为连续高斯分布，不能直接计算离散值的概率。
+
+**原论文的处理方式：** 将 $p_\theta(x_0|x_1)$ 建模为高斯分布的区间积分——即对每个像素值 $x_0^{(i)}$，计算其在 $[x_0^{(i)} - \frac{1}{255}, x_0^{(i)} + \frac{1}{255}]$ 区间内的概率质量。
+
+**实践中的简化：** 使用简化损失 $\mathcal{L}_{\text{simple}}$ 时，通常直接忽略 $L_0$，因为：
+- $L_0$ 对生成质量影响极小
+- 仅在需要计算精确对数似然（如评估 NLL/bpd 指标）时才需处理
+- 简化损失已经隐式地通过 $t=1$ 的噪声预测覆盖了重建信息
+
 ### 5.4 简化损失函数
 
 Ho et al. (2020) 发现**忽略权重 $w_t$**（即设 $w_t = 1$）反而效果更好：
@@ -361,6 +372,21 @@ $$\boxed{\mathcal{L}_{\text{simple}} = \mathbb{E}_{t,x_0,\epsilon}\left[\|\epsil
 | 低噪声步（小 $t$）权重大 | 生成质量更高 |
 
 > 💡 **直觉：** 简化损失让网络在所有噪声水平上都学好，而加权损失让网络过度关注低噪声步，忽略了高噪声步的全局结构。
+
+**深入理解：权重 $w_t$ 与信噪比（SNR）的关系**
+
+VLB 损失中的权重可以化简为：
+
+$$w_t \approx \frac{\beta_t}{2(1-\bar{\alpha}_t)}$$
+
+而信噪比定义为 $\text{SNR}(t) = \frac{\bar{\alpha}_t}{1-\bar{\alpha}_t}$，因此 $w_t$ 与 SNR 成反比：
+
+| 时间步 | SNR | $w_t$ | VLB 的行为 | 简化损失的行为 |
+|--------|-----|-------|-----------|--------------|
+| 低 $t$（弱噪声） | 高 | **极大** | 过度关注细节，忽略全局结构 | 等权训练 |
+| 高 $t$（强噪声） | 低 | **极小** | 高噪声步几乎得不到训练 | 等权训练 |
+
+**结论：** 简化损失给所有时间步等权，让高 $t$ 步的全局结构学习更充分，生成质量更优。虽然 $\mathcal{L}_{\text{simple}}$ 不直接优化 ELBO，但优化它的同时也会降低 VLB（两者梯度方向大致一致）。
 
 ---
 
@@ -399,6 +425,34 @@ $$\mu_\theta(x_t, t) = \frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alph
 | ε-prediction | $\epsilon_\theta$ | 一般 | 最常见，DDPM 默认 |
 | x₀-prediction | $\hat{x}_0$ | 较差（高噪声时不稳定） | 需要直接估计 $x_0$ |
 | v-prediction | $v_\theta$ | **最好** | 级联模型、高分辨率 |
+
+### 6.5 噪声预测网络的核心：时间步嵌入
+
+**为什么需要时间步嵌入？** 噪声预测网络 $\epsilon_\theta(x_t, t)$ 的权重在所有时间步 $t$ 上共享。如果不显式告知网络当前的噪声水平，网络无法区分不同 $t$ 的 $x_t$——同样的 $x_t$ 在 $t=100$ 和 $t=900$ 时，噪声水平完全不同，需要不同的去噪策略。
+
+**标准实现：** 采用正弦位置编码（与 Transformer 位置编码一致）对 $t$ 编码，再通过全连接层映射后，融合到 UNet 的每一个残差块中。
+
+```python
+class TimeEmbedding(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, t):
+        device = t.device
+        half_dim = self.dim // 2
+        emb = torch.log(torch.tensor(10000.0)) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = t[:, None] * emb[None, :]
+        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
+        return emb
+```
+
+**时间步嵌入的融合方式：** 在 UNet 的每个残差块中，将时间嵌入通过一个线性层映射后，加到卷积特征上：
+
+$$h' = h + \text{Linear}(\text{TimeEmbed}(t))$$
+
+这样每个残差块都能感知当前的噪声水平，从而自适应地调整去噪策略。
 
 ---
 
@@ -450,6 +504,16 @@ $$\bar{\alpha}_t = \frac{f(t)}{f(0)}, \quad f(t) = \cos\left(\frac{t/T + s}{1 + 
 
 $$\tilde{\beta}_t = \frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha}_t}\beta_t \approx \frac{1-\bar{\alpha}_t}{1-\bar{\alpha}_t}\beta_t = \beta_t$$
 
+**但这个近似在以下情况下不成立：**
+
+| 场景 | $\tilde{\beta}_t$ vs $\beta_t$ | 应选择 |
+|------|-------------------------------|--------|
+| 使用简化损失 $\mathcal{L}_{\text{simple}}$ | 差异对质量影响极小（只优化了均值） | 两者均可 |
+| 需要精准优化对数似然 | 必须使用 $\tilde{\beta}_t$ 或可学习方差 | $\tilde{\beta}_t$ 或 $\Sigma_\theta(x_t, t)$ |
+| 采样步数减少（如 1000→100） | 两者数值差距不可忽略 | **必须用 $\tilde{\beta}_t$** |
+
+> ⚠️ **关键细节：** 简化损失 $\mathcal{L}_{\text{simple}}$ 只优化了均值 $\mu_\theta$，不优化方差 $\sigma_t^2$。因此使用简化损失时，$\sigma_t$ 的选择对生成质量影响极小。但若要精准优化对数似然，需将 $\sigma_t$ 设为可学习参数 $\Sigma_\theta(x_t, t)$，并使用 VLB 损失训练（Improved DDPM, Nichol & Dhariwal 2021）。
+
 ### 8.2 完整采样算法
 
 **算法：DDPM 采样（反向过程）**
@@ -490,6 +554,26 @@ $$\epsilon_\theta(x_t, t) = -\sqrt{1-\bar{\alpha}_t} \cdot s_\theta(x_t, t)$$
 - **DDPM 本质上在学习 score**，只是用不同的参数化
 - **Score SDE 可以看作 DDPM 的连续化推广**
 - 两种方法在理论上等价，只是实现方式不同
+
+### 9.3 DDPM 反向采样与朗之万动力学
+
+将 $\epsilon_\theta = -\sqrt{1-\bar{\alpha}_t} \cdot s_\theta(x_t, t)$ 代入反向过程的均值公式：
+
+$$\tilde{\mu}_t = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta\right) = \frac{1}{\sqrt{\alpha_t}}\left(x_t + \beta_t \cdot s_\theta(x_t, t)\right)$$
+
+当 $\beta_t$ 很小时，$\frac{1}{\sqrt{\alpha_t}} = \frac{1}{\sqrt{1-\beta_t}} \approx 1 + \frac{\beta_t}{2}$，因此：
+
+$$\tilde{\mu}_t \approx x_t + \beta_t \cdot s_\theta(x_t, t) + O(\beta_t^2)$$
+
+而反向采样为 $x_{t-1} = \tilde{\mu}_t + \sigma_t z$，即：
+
+$$x_{t-1} \approx x_t + \beta_t \cdot \nabla_{x_t}\log p(x_t) + \sqrt{\beta_t} \cdot z$$
+
+**这正是朗之万动力学（Langevin Dynamics）** 的离散形式：
+
+$$x' = x + \frac{\epsilon}{2}\nabla_x \log p(x) + \sqrt{\epsilon} \cdot z$$
+
+其中步长 $\epsilon$ 对应 $\beta_t$。朗之万动力学是带噪声的梯度上升——沿着数据分布的 score（对数概率梯度）更新，同时加入高斯噪声保证采样遍历性。这也从另一个角度印证了 DDPM 与 Score Matching 的等价性。
 
 ---
 
@@ -550,41 +634,43 @@ class DDPMScheduler:
         self.T = T
 
         if beta_schedule == 'linear':
-            self.beta = torch.linspace(1e-4, 0.02, T)
+            self.beta = torch.linspace(1e-4, 0.02, T, dtype=torch.float32)
+            self.alpha = 1.0 - self.beta
+            self.alpha_bar = torch.cumprod(self.alpha, dim=0)
         elif beta_schedule == 'cosine':
-            steps = torch.arange(T + 1)
-            self.beta = torch.clip(
-                1 - (steps[1:] / T) / ((steps[:-1] / T) + 0.008) ** 2 * torch.pi / 2,
-                0.0001, 0.9999
-            )
-
-        self.alpha = 1.0 - self.beta
-        self.alpha_bar = torch.cumprod(self.alpha, dim=0)
+            s = 0.008
+            steps = torch.arange(T + 1, dtype=torch.float32)
+            f_t = torch.cos((steps / T + s) / (1 + s) * torch.pi / 2) ** 2
+            alpha_bar = f_t / f_t[0]
+            self.alpha = alpha_bar[1:] / alpha_bar[:-1]
+            self.beta = torch.clip(1 - self.alpha, 1e-4, 0.9999)
+            self.alpha_bar = alpha_bar[1:]
 
 class DDPMTrainer:
     def __init__(self, model, scheduler, lr=1e-4):
         self.model = model
         self.scheduler = scheduler
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-6)
 
     def train_step(self, x_0):
         B = x_0.shape[0]
         device = x_0.device
 
-        t = torch.randint(1, self.scheduler.T, (B,), device=device)
+        t = torch.randint(1, self.scheduler.T + 1, (B,), device=device)
 
         eps = torch.randn_like(x_0)
 
         alpha_bar = self.scheduler.alpha_bar.to(device)
-        ab = alpha_bar[t].view(-1, 1, 1, 1)
+        ab = alpha_bar[t - 1].view(-1, *([1] * (x_0.ndim - 1)))
         x_t = torch.sqrt(ab) * x_0 + torch.sqrt(1 - ab) * eps
 
         eps_pred = self.model(x_t, t)
 
-        loss = torch.mean((eps - eps_pred) ** 2)
+        loss = nn.functional.mse_loss(eps_pred, eps)
 
         self.optimizer.zero_grad()
         loss.backward()
+        nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.optimizer.step()
 
         return loss.item()
@@ -594,32 +680,37 @@ class DDPMTrainer:
 
 ```python
 @torch.no_grad()
-def sample_ddpm(model, scheduler, shape, device='cuda'):
+def sample_ddpm(model, scheduler, shape, device='cuda', return_all_steps=False):
+    alpha = scheduler.alpha.to(device)
     alpha_bar = scheduler.alpha_bar.to(device)
     beta = scheduler.beta.to(device)
-    alpha = scheduler.alpha.to(device)
 
     x = torch.randn(shape, device=device)
+    all_steps = [x.cpu()] if return_all_steps else None
 
-    for t in reversed(range(1, scheduler.T)):
+    for t in reversed(range(1, scheduler.T + 1)):
         t_batch = torch.full((shape[0],), t, device=device, dtype=torch.long)
+        t_idx = t - 1
 
         eps_pred = model(x, t_batch)
 
-        ab = alpha_bar[t]
-        b = beta[t]
-        a = alpha[t]
+        ab = alpha_bar[t_idx]
+        b = beta[t_idx]
+        a = alpha[t_idx]
 
         mu = (1 / torch.sqrt(a)) * (x - (b / torch.sqrt(1 - ab)) * eps_pred)
 
         if t > 1:
-            sigma = torch.sqrt(beta[t])
+            sigma = torch.sqrt(beta[t_idx])
             z = torch.randn_like(x)
             x = mu + sigma * z
         else:
             x = mu
 
-    return x
+        if return_all_steps:
+            all_steps.append(x.cpu())
+
+    return (x, all_steps) if return_all_steps else x
 ```
 
 ---
